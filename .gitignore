@@ -1,0 +1,12 @@
+cmake-build-debug/
+cmake-build-release/
+bin/
+SDL3/
+imgui/
+editor.xml
+misc.xml
+modules.xml
+Project_Default.xml
+SDL3_test.iml
+vcs.xml
+.idea/
