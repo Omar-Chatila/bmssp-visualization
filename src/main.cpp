@@ -25,15 +25,14 @@
 #else
 #include <SDL3/SDL_opengl.h>
 #endif
-void show_steps_table();
 
 static SDL_FRect grid{40, 40, UI::GRID_SIZE, UI::GRID_SIZE};
-static  float x_0 = grid.x;
-static  float y_0 = grid.y;
-static  float w  = grid.w;
-static  float h  = grid.h;
-static  float dx = w / static_cast<float>(UI::CELLS_X);
-static  float dy = h / static_cast<float>(UI::CELLS_Y);
+static float x_0 = grid.x;
+static float y_0 = grid.y;
+static float w  = grid.w;
+static float h  = grid.h;
+static float dx = w / static_cast<float>(UI::CELLS_X);
+static float dy = h / static_cast<float>(UI::CELLS_Y);
 
 
 inline void draw_rect(SDL_Renderer* renderer, const int x, const int y, const ImVec4& color) {
@@ -178,6 +177,8 @@ int main(int, char**)
         ImGui::PushStyleColor(ImGuiCol_ButtonActive, (ImVec4)ImColor::HSV(i / 7.0f, 0.8f, 0.8f));
         ImGui::InputInt("start x", &start_x);
         ImGui::InputInt("start y", &start_y);
+        start_x = std::clamp(start_x, 0, UI::CELLS_X - 1);
+        start_y = std::clamp(start_y, 0, UI::CELLS_Y - 1);
         ImGui::PopStyleColor(3);
         ImGui::PopID();
         ImGui::Separator();
@@ -191,7 +192,12 @@ int main(int, char**)
 
         static std::vector<DijkstraFrame> dijkstra_frames;
 
+        static int last_X = UI::CELLS_X;
+        static int last_Y = UI::CELLS_Y;
         if (ImGui::Button("Execute")) {
+            last_X = UI::CELLS_X;
+            last_Y = UI::CELLS_Y;
+            dijkstra_frames.clear();
             Graph graph(UI::CELLS_X, UI::CELLS_Y);
             std::cout << graph.size() << std::endl;
             if (e == DIJKSTRA) {
@@ -251,7 +257,7 @@ int main(int, char**)
         // Grid
         render_grid(renderer);
 
-        if (current_frame) {
+        if (current_frame && UI::CELLS_X == last_X && UI::CELLS_Y == last_Y) {
             auto& f = *current_frame;
 
             for (int y = 0; y < UI::CELLS_Y; ++y) {
@@ -282,24 +288,4 @@ int main(int, char**)
     SDL_Quit();
 
     return 0;
-}
-void show_steps_table() {
-    static ImGuiTableFlags flags =
-        ImGuiTableFlags_Resizable | ImGuiTableFlags_Reorderable | ImGuiTableFlags_Hideable |
-        ImGuiTableFlags_Sortable | ImGuiTableFlags_RowBg |
-        ImGuiTableFlags_BordersOuter | ImGuiTableFlags_BordersV | ImGuiTableFlags_NoBordersInBody |
-        ImGuiTableFlags_ScrollY;
-
-    if (ImGui::BeginTable("table_sorting", 4, flags, ImVec2(0.0f, 12 * 15))) {
-        ImGui::TableSetupColumn("index", ImGuiTableColumnFlags_WidthFixed);
-        ImGui::TableSetupColumn("start", ImGuiTableColumnFlags_WidthFixed);
-        ImGui::TableSetupColumn("goal", ImGuiTableColumnFlags_WidthFixed);
-        ImGui::TableSetupColumn("color", ImGuiTableColumnFlags_WidthFixed);
-        ImGui::TableSetupScrollFreeze(0, 1);
-        ImGui::TableHeadersRow();
-
-
-
-
-    }
 }
