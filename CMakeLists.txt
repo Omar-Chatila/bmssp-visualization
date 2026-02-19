@@ -68,6 +68,8 @@ PUBLIC
 #-------------------------------------------
 set(APP_NAME "TestEmu")
 set(SOURCES src/main.cpp
+        src/BMSSP.h
+        src/BMSSP.cpp
         src/properties.h
         src/Dijkstra.h
         src/Dijkstra.cpp

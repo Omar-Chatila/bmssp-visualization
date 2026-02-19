@@ -34,6 +34,11 @@ static float h  = grid.h;
 static float dx = w / static_cast<float>(UI::CELLS_X);
 static float dy = h / static_cast<float>(UI::CELLS_Y);
 
+// TODO: PQ Yellow
+// TODO: current node pulsating
+// TODO: auto-play
+// TODO: dist-heatmap
+// TODO: Blocking Cells
 
 inline void draw_rect(SDL_Renderer* renderer, const int x, const int y, const ImVec4& color) {
     SDL_SetRenderDrawColorFloat(renderer, color.x, color.y, color.z,color.w);
@@ -104,28 +109,10 @@ int main(int, char**)
 
     // Setup Dear ImGui style
     ImGui::StyleColorsDark();
-    //ImGui::StyleColorsLight();
 
     // Setup Platform/Renderer backends
     ImGui_ImplSDL3_InitForSDLRenderer(window, renderer);
     ImGui_ImplSDLRenderer3_Init(renderer);
-
-    // Load Fonts
-    // - If no fonts are loaded, dear imgui will use the default font. You can also load multiple fonts and use ImGui::PushFont()/PopFont() to select them.
-    // - AddFontFromFileTTF() will return the ImFont* so you can store it if you need to select the font among multiple.
-    // - If the file cannot be loaded, the function will return a nullptr. Please handle those errors in your application (e.g. use an assertion, or display an error and quit).
-    // - The fonts will be rasterized at a given size (w/ oversampling) and stored into a texture when calling ImFontAtlas::Build()/GetTexDataAsXXXX(), which ImGui_ImplXXXX_NewFrame below will call.
-    // - Use '#define IMGUI_ENABLE_FREETYPE' in your imconfig file to use Freetype for higher quality font rendering.
-    // - Read 'docs/FONTS.md' for more instructions and details.
-    // - Remember that in C/C++ if you want to include a backslash \ in a string literal you need to write a double backslash \\ !
-    // - Our Emscripten build process allows embedding fonts to be accessible at runtime from the "fonts/" folder. See Makefile.emscripten for details.
-    //io.Fonts->AddFontDefault();
-    //io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\segoeui.ttf", 18.0f);
-    //io.Fonts->AddFontFromFileTTF("../../misc/fonts/DroidSans.ttf", 16.0f);
-    //io.Fonts->AddFontFromFileTTF("../../misc/fonts/Roboto-Medium.ttf", 16.0f);
-    //io.Fonts->AddFontFromFileTTF("../../misc/fonts/Cousine-Regular.ttf", 15.0f);
-    //ImFont* font = io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\ArialUni.ttf", 18.0f, nullptr, io.Fonts->GetGlyphRangesJapanese());
-    //IM_ASSERT(font != nullptr);
 
     // Our state
     bool show_demo_window = true;
@@ -142,11 +129,6 @@ int main(int, char**)
     while (!done)
 #endif
     {
-        // Poll and handle events (inputs, window resize, etc.)
-        // You can read the io.WantCaptureMouse, io.WantCaptureKeyboard flags to tell if dear imgui wants to use your inputs.
-        // - When io.WantCaptureMouse is true, do not dispatch mouse input data to your main application, or clear/overwrite your copy of the mouse data.
-        // - When io.WantCaptureKeyboard is true, do not dispatch keyboard input data to your main application, or clear/overwrite your copy of the keyboard data.
-        // Generally you may always pass all inputs to dear imgui, and hide them from your application based on those two flags.
         SDL_Event event;
         while (SDL_PollEvent(&event))
         {
@@ -199,7 +181,6 @@ int main(int, char**)
             last_Y = UI::CELLS_Y;
             dijkstra_frames.clear();
             Graph graph(UI::CELLS_X, UI::CELLS_Y);
-            std::cout << graph.size() << std::endl;
             if (e == DIJKSTRA) {
                 Dijkstra dijkstra(graph, graph.get_vertex(INDEX(start_x, start_y)));
                 auto dists = dijkstra.std_heap_run();
@@ -265,6 +246,12 @@ int main(int, char**)
                     if (f.finalized[INDEX(x,y)]) {
                         draw_rect(renderer, x, y, ImVec4(1,0,0,1));
                     }
+                    // PQ-visualization
+                    /*
+                    *if (std::ranges::contains(f.pq_vertices, INDEX(x,y))) {
+                    draw_rect(renderer, x, y, ImVec4(1,0,0,1));
+                    }
+                    */
                 }
             }
         }

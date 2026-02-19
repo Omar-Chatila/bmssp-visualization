@@ -1,4 +1,4 @@
-#include "../include/BMSSP.h"
+#include "BMSSP.h"
 
 #include <cmath>
 #include <functional>
@@ -121,11 +121,13 @@ std::pair<double, VertexSet> BMSSP::base_case(const Pair& S, const double B) con
 }
 
 std::pair<double, VertexSet> BMSSP::bmssp(const int l, const double B, const VertexSet& S) {
+    push_state(BMSSP_Event::RecurseEnter, l, B, dist_cache_, finalized_, S, {}, -1);
     if (l == 0) {
         return base_case(S[0], B);
     }
 
     auto [P, W] = find_pivots(S, B);
+    push_state(BMSSP_Event::Pivots, l, B, dist_cache_, finalized_, S,P,-1);
 
     const auto M = static_cast<size_t>(std::pow(2, (l - 1) * t_));
     DequeueBlocks D(n_, M, B);
@@ -134,6 +136,7 @@ std::pair<double, VertexSet> BMSSP::bmssp(const int l, const double B, const Ver
         D.insert(vtx, dist_v);
         B_prime = std::min(B_prime, dist_v);
     }
+    push_state(BMSSP_Event::Frontier, l, B_prime,dist_cache_, finalized_,P,P,-1);
 
     VertexSet U;
     const auto cap = static_cast<size_t>(std::pow(2, l * t_));
@@ -191,7 +194,31 @@ std::vector<double> BMSSP::run() {
     constexpr double B = INF;
     dist_cache_[source_->id_] = 0;
 
+    push_state(BMSSP_Event::Start, l, B, dist_cache_, {},{S}, {}, source_->id_);
+
     bmssp(l, B, S);
 
     return std::move(dist_cache_);
+}
+
+void BMSSP::push_state(BMSSP_Event type, int level, double B,
+                            const std::vector<double>& dist,
+                            const std::vector<bool>& finalized,
+                            VertexSet frontier,
+                            VertexSet pivots,
+                            const uint64_t current) {
+    BMSSP_Frame f;
+    f.event = type;
+    f.level = level;
+    f.B = B;
+    f.dist = dist;
+    f.finalized = finalized;
+    f.frontier = frontier
+             | std::views::transform([](const Pair& p){ return p.key_->id_; })
+             | std::ranges::to<std::vector<uint64_t>>();
+    f.pivots = pivots
+            | std::views::transform([](const Pair& p) { return p.key_->id_; })
+            | std::ranges::to<std::vector<uint64_t>>();
+    f.current = current;
+    frames_.push_back(f);
 }
