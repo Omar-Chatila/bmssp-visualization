@@ -18,6 +18,8 @@
 #include <cstdio>
 #include <iostream>
 #include <SDL3/SDL.h>
+
+#include "BMSSP.h"
 #include "Dijkstra.h"
 #include "properties.h"
 #if defined(IMGUI_IMPL_OPENGL_ES2)
@@ -46,6 +48,13 @@ inline void draw_rect(SDL_Renderer* renderer, const int x, const int y, const Im
     SDL_RenderFillRect(renderer, &rect);
 }
 
+inline bool same_state(const int last_X, const int last_Y, const int last_sx, const int last_sy) {
+    return UI::CELLS_X == last_X
+        && UI::CELLS_Y == last_Y
+        && UI::start_x == last_sx
+        && UI::start_y == last_sy;
+}
+
 inline void render_grid(SDL_Renderer* renderer) {
     grid = SDL_FRect{40, 40, UI::GRID_SIZE, UI::GRID_SIZE};
     x_0 = grid.x;
@@ -69,7 +78,7 @@ inline void render_grid(SDL_Renderer* renderer) {
 }
 
 #define DIJKSTRA 0
-#define BMSSP 1
+#define BMSSP_ALGO 1
 
 // Main code
 int main(int, char**)
@@ -116,7 +125,6 @@ int main(int, char**)
 
     // Our state
     bool show_demo_window = true;
-    bool show_another_window = false;
 
     // Main loop
     bool done = false;
@@ -133,7 +141,7 @@ int main(int, char**)
         while (SDL_PollEvent(&event))
         {
             ImGui_ImplSDL3_ProcessEvent(&event);
-            if (event.type == SDL_EVENT_QUIT)
+            if (event.type == SDL_EVENT_QUIT || event.key.scancode == SDL_SCANCODE_ESCAPE)
                 done = true;
             if (event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED && event.window.windowID == SDL_GetWindowID(window))
                 done = true;
@@ -149,18 +157,20 @@ int main(int, char**)
         ImGui_ImplSDLRenderer3_NewFrame();
         ImGui_ImplSDL3_NewFrame();
         ImGui::NewFrame();
-
+        ImGui::Begin("Algorithm Settings");
         //show_steps_table();
-        static int start_x = 0, start_y = 0;
+
         int i = 3;
         ImGui::PushID(i);
-        ImGui::PushStyleColor(ImGuiCol_Button, (ImVec4)ImColor::HSV(i / 7.0f, 0.6f, 0.6f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, (ImVec4)ImColor::HSV(i / 7.0f, 0.7f, 0.7f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, (ImVec4)ImColor::HSV(i / 7.0f, 0.8f, 0.8f));
-        ImGui::InputInt("start x", &start_x);
-        ImGui::InputInt("start y", &start_y);
-        start_x = std::clamp(start_x, 0, UI::CELLS_X - 1);
-        start_y = std::clamp(start_y, 0, UI::CELLS_Y - 1);
+        ImGui::PushStyleColor(ImGuiCol_Button, static_cast<ImVec4>(ImColor::HSV(i / 7.0f, 0.6f, 0.6f)));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, static_cast<ImVec4>(ImColor::HSV(i / 7.0f, 0.7f, 0.7f)));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, static_cast<ImVec4>(ImColor::HSV(i / 7.0f, 0.8f, 0.8f)));
+        ImGui::InputInt("start x", &UI::start_x);
+        ImGui::InputInt("start y", &UI::start_y);
+        UI::start_x = std::clamp(UI::start_x, 0, UI::CELLS_X - 1);
+        UI::start_y = std::clamp(UI::start_y, 0, UI::CELLS_Y - 1);
+        static int last_sx = UI::start_x;
+        static int last_sy = UI::start_y;
         ImGui::PopStyleColor(3);
         ImGui::PopID();
         ImGui::Separator();
@@ -173,29 +183,46 @@ int main(int, char**)
 #define INDEX(x, y) (y * UI::CELLS_X + x)
 
         static std::vector<DijkstraFrame> dijkstra_frames;
+        static std::vector<BMSSP_Frame> bmssp_frames;
 
         static int last_X = UI::CELLS_X;
         static int last_Y = UI::CELLS_Y;
+
         if (ImGui::Button("Execute")) {
+            UI::state = ProgramState::Execution;
             last_X = UI::CELLS_X;
             last_Y = UI::CELLS_Y;
+            last_sx = UI::start_x;
+            last_sy = UI::start_y;
             dijkstra_frames.clear();
             Graph graph(UI::CELLS_X, UI::CELLS_Y);
             if (e == DIJKSTRA) {
-                Dijkstra dijkstra(graph, graph.get_vertex(INDEX(start_x, start_y)));
+                Dijkstra dijkstra(graph, graph.get_vertex(INDEX(UI::start_x, UI::start_y)));
                 auto dists = dijkstra.std_heap_run();
                 dijkstra_frames = dijkstra.frames();
+            } else if (e == BMSSP_ALGO) {
+                BMSSP bmssp(graph, graph.get_vertex(INDEX(UI::start_x, UI::start_y)));
+                bmssp.run();
+                bmssp_frames = bmssp.frames();
             }
         }
 
         static int frame = 0;
-        static DijkstraFrame* current_frame = nullptr;
+        static DijkstraFrame* dijkstra_frame = nullptr;
+        static BMSSP_Frame* bmssp_frame = nullptr;
 
-        if (!dijkstra_frames.empty()) {
-            ImGui::SliderInt("Step", &frame, 0, static_cast<int>(dijkstra_frames.size())-1);
-            current_frame = &dijkstra_frames[frame];
-        }
+        size_t v_max = 0;
+        if (e == DIJKSTRA) v_max = dijkstra_frames.empty() ? 0 : dijkstra_frames.size() - 1;
+        else v_max = bmssp_frames.empty() ? 0 : bmssp_frames.size() - 1;
+        frame = std::clamp(frame, 0, static_cast<int>(v_max));
 
+        if (UI::state == ProgramState::Execution && v_max > 0)
+            ImGui::SliderInt("Step", &frame, 0, static_cast<int>(v_max));
+
+        if (e == DIJKSTRA && !dijkstra_frames.empty())
+            dijkstra_frame = &dijkstra_frames[frame];
+        else if (e == BMSSP_ALGO && !bmssp_frames.empty())
+            bmssp_frame = &bmssp_frames[frame];
 
         // 1. Show the big demo window (Most of the sample code is in ImGui::ShowDemoWindow()! You can browse its code to learn more about Dear ImGui!).
         if (show_demo_window)
@@ -205,8 +232,7 @@ int main(int, char**)
         // 2. Show a simple window that we create ourselves. We use a Begin/End pair to create a named window.
         {
             static int* dims[2] = {&UI::CELLS_X, &UI::CELLS_Y};
-            static int counter = 0;
-            ImGui::Begin("Hello World");
+            ImGui::Begin("Grid Settings");
             ImGui::SliderFloat("Grid Width", &UI::GRID_SIZE, 400.0f, 1000.0f);
             ImGui::SliderInt2("Grid Width / Height", *dims, 8, 20);
             ImGui::ColorEdit3("Grid color", reinterpret_cast<float *>(&UI::grid_color));
@@ -216,16 +242,7 @@ int main(int, char**)
             ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
             ImGui::End();
         }
-
-        // 3. Show another simple window.
-        if (show_another_window)
-        {
-            ImGui::Begin("Another Window", &show_another_window);   // Pass a pointer to our bool variable (the window will have a closing button that will clear the bool when clicked)
-            ImGui::Text("Hello from another window!");
-            if (ImGui::Button("Close Me"))
-                show_another_window = false;
-            ImGui::End();
-        }
+        ImGui::End();
 
         // Rendering
         ImGui::Render();
@@ -238,13 +255,33 @@ int main(int, char**)
         // Grid
         render_grid(renderer);
 
-        if (current_frame && UI::CELLS_X == last_X && UI::CELLS_Y == last_Y) {
-            auto& f = *current_frame;
+        if (!same_state(last_X, last_Y, last_sx, last_sy)) {
+            UI::state = ProgramState::StartSelection;
+            dijkstra_frame = nullptr;
+            bmssp_frame = nullptr;
+        }
 
+        if (dijkstra_frame) {
+            auto& f = *dijkstra_frame;
             for (int y = 0; y < UI::CELLS_Y; ++y) {
                 for (int x = 0; x < UI::CELLS_X; ++x) {
                     if (f.finalized[INDEX(x,y)]) {
-                        draw_rect(renderer, x, y, ImVec4(1,0,0,1));
+                        draw_rect(renderer, x, y, UI::dijkstra::event_cols[D_FIN]);
+                    }
+                    // PQ-visualization
+                    /*
+                    *if (std::ranges::contains(f.pq_vertices, INDEX(x,y))) {
+                    draw_rect(renderer, x, y, ImVec4(1,0,0,1));
+                    }
+                    */
+                }
+            }
+        } else if (bmssp_frame) {
+            auto& f = *bmssp_frame;
+            for (int y = 0; y < UI::CELLS_Y; ++y) {
+                for (int x = 0; x < UI::CELLS_X; ++x) {
+                    if (f.finalized[INDEX(x,y)]) {
+                        draw_rect(renderer, x, y, UI::bmssp::event_cols[B_FIN]);
                     }
                     // PQ-visualization
                     /*
@@ -256,8 +293,7 @@ int main(int, char**)
             }
         }
 
-        draw_rect(renderer, start_x, start_y, ImVec4(0, 1, 0, 1));
-
+        draw_rect(renderer, UI::start_x, UI::start_y, ImVec4(0, 1, 0, 1));
         ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), renderer);
         SDL_RenderPresent(renderer);
     }

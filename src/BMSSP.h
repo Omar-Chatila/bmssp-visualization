@@ -52,7 +52,7 @@ class BMSSP {
     [[nodiscard]]
     std::pair<VertexSet, VertexSet> find_pivots(const VertexSet& S, double B) const;
 
-    std::pair<double, VertexSet> base_case(const Pair& S, double B) const;
+    std::pair<double, VertexSet> base_case(const Pair& S, double B);
 
     std::pair<double, VertexSet> bmssp(int l, double B, const VertexSet& S);
 public:

@@ -17,6 +17,7 @@ BMSSP::BMSSP(Graph &graph, const Vertex* src) : graph_(graph), source_(src) {
     pivot_tree_sz_cache_.reserve(n_);
     dist_cache_.assign(n_, INF);
     last_complete_level_.resize(n_, -1);
+    finalized_.resize(n_, false);
 }
 
 BMSSP::BMSSP(Graph &graph, const Vertex* src, const size_t k, const size_t t) : graph_(graph), source_(src), n_(graph.size()), k_(k), t_(t) {
@@ -24,6 +25,7 @@ BMSSP::BMSSP(Graph &graph, const Vertex* src, const size_t k, const size_t t) : 
     pivot_tree_sz_cache_.reserve(n_);
     dist_cache_.assign(n_, INF);
     last_complete_level_.resize(n_, -1);
+    finalized_.resize(n_, false);
 }
 
 std::pair<VertexSet, VertexSet> BMSSP::find_pivots(const VertexSet& S, const double B) const {
@@ -82,7 +84,7 @@ std::pair<VertexSet, VertexSet> BMSSP::find_pivots(const VertexSet& S, const dou
     return {std::move(P), std::move(W)};
 }
 
-std::pair<double, VertexSet> BMSSP::base_case(const Pair& S, const double B) const {
+std::pair<double, VertexSet> BMSSP::base_case(const Pair& S, const double B) {
     const auto& [v_ptr, v_dist] = S;
 
     std::priority_queue<Pair, VertexSet, std::function<bool(const Pair&, const Pair&)>> H(
@@ -99,7 +101,7 @@ std::pair<double, VertexSet> BMSSP::base_case(const Pair& S, const double B) con
         H.pop();
 
         if (d_u > dist_cache_[u->id_]) continue;
-
+        finalized_[u->id_] = true;
         U.emplace_back(u, d_u);
         for (const auto& [v_id, w_uv] : u->outgoing_edges_) {
             const Vertex *v = graph_.get_vertex(v_id);
@@ -111,11 +113,14 @@ std::pair<double, VertexSet> BMSSP::base_case(const Pair& S, const double B) con
         }
     }
 
-    if (U.size() <= k_)
+    if (U.size() <= k_) {
+        push_state(BMSSP_Event::BaseCase, 0, B, dist_cache_, finalized_, U,{}, S.key_->id_);
         return {B, U};
+    }
 
     double B_new = dist_cache_[U.back().key_->id_];
     U.pop_back();
+    push_state(BMSSP_Event::BaseCase, 0,B, dist_cache_, finalized_, U,{}, S.key_->id_);
 
     return {B_new, std::move(U)};
 }
@@ -145,14 +150,18 @@ std::pair<double, VertexSet> BMSSP::bmssp(const int l, const double B, const Ver
     while (U.size() < cap and not D.empty()) {
         auto [Si, Bi] = D.pull();
         if (Si.empty()) break;
+        push_state(BMSSP_Event::Pull, l, Bi, dist_cache_, finalized_,Si,{},-1);
 
         auto [Bi_prime, Ui] = bmssp(l - 1, Bi, Si);
+        push_state(BMSSP_Event::RecurseExit,l - 1, Bi_prime, dist_cache_, finalized_,Ui,{},-1);
         U.insert(U.end(), Ui.begin(), Ui.end());
+        push_state(BMSSP_Event::Frontier, l, B_prime, dist_cache_, finalized_,U,{},-1);
 
         VertexSet K;
         for (const auto& [u, du] : Ui) {
             D.erase(u);
             last_complete_level_[u->id_] = l;
+            finalized_[u->id_] = true;
             for (const auto& [v_id, w_uv] : u->outgoing_edges_) {
                 const Vertex *v = graph_.get_vertex(v_id);
                 const double cand = du + w_uv;
@@ -180,10 +189,11 @@ std::pair<double, VertexSet> BMSSP::bmssp(const int l, const double B, const Ver
     for (const auto& [vtx, dv] : W) {
         if (last_complete_level_[vtx->id_] != l and dist_cache_[vtx->id_] < resB) {
             last_complete_level_[vtx->id_] = l;
+            finalized_[vtx->id_] = true;
             U.emplace_back(vtx, dist_cache_[vtx->id_]);
         }
     }
-
+    push_state(BMSSP_Event::Done, l, resB, dist_cache_, finalized_, U,{},-1);
     return {resB, std::move(U)};
 }
 
@@ -194,7 +204,7 @@ std::vector<double> BMSSP::run() {
     constexpr double B = INF;
     dist_cache_[source_->id_] = 0;
 
-    push_state(BMSSP_Event::Start, l, B, dist_cache_, {},{S}, {}, source_->id_);
+    push_state(BMSSP_Event::Start, l, B, dist_cache_, finalized_,{S}, {}, source_->id_);
 
     bmssp(l, B, S);
 
